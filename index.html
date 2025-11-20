@@ -216,21 +216,25 @@ function generateFlames(count = 30) {
     }
 }
 
-        function updateFire(correct) {
-    if (correct) {
-        // fuoco e fumo diminuiscono
-        fireBackground.style.height = "80px";
-        fireBackground.style.opacity = "0.4";
-        smokeOverlay.style.opacity = "0.2";
-    } else {
-        // fuoco e fumo aumentano chiaramente
-        fireBackground.style.height = "260px";
-        fireBackground.style.opacity = "1";
-        smokeOverlay.style.opacity = "0.7";
-    }
-}
+      function updateFire(correct){
+    const fireStep = 40; // quanto aumentano/diminuiscono le fiamme
+    const smokeStep = 0.15; // quanto cambia il fumo
 
+    if(correct){
+        fireHeight = Math.max(80, fireHeight - fireStep); // abbassa fiamme, min 80px
+        smokeOpacity = Math.max(0.2, smokeOpacity - smokeStep);
+    } else {
+        fireHeight = Math.min(400, fireHeight + fireStep); // alza fiamme, max 400px
+        smokeOpacity = Math.min(1, smokeOpacity + smokeStep);
+    }
+
+    fireBackground.style.height = fireHeight + 'px';
+    smokeOverlay.style.opacity = smokeOpacity;
+}
         const smokeOverlay=document.getElementById('smokeOverlay');
+      
+        let fireHeight = 120;      // altezza iniziale fiamme
+        let smokeOpacity = 0.3;    // opacità iniziale fumo
 
         /* ---------------- DECISIONS ---------------- */
        const decisions = [
@@ -561,15 +565,15 @@ function generateFlames(count = 30) {
             if(consequenceDiv){ consequenceDiv.classList.add('show'); }
             
             // Aggiorna punteggi
-            if(selectedChoice.correct){
-                safetyScore += 5;
-                damageScore -= 5;
-                updateFire(true);
-            } else{
-                safetyScore -= 10;
-                damageScore += 10;
-                updateFire(false);
-            }
+         if(selectedChoice.correct){
+    safetyScore += 5;
+    damageScore -= 5;
+    updateFire(true);
+} else{
+    safetyScore -= 10;
+    damageScore += 10;
+    updateFire(false);
+}
 
             document.getElementById('safetyDisplay').textContent=Math.max(0,safetyScore)+'%';
 
