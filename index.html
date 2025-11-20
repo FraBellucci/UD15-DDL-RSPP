@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UD15 - Simulatore Emergenza Incendio</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background:#000; color:white; overflow-x:hidden;
+        }
+
+        /* FIRE & SMOKE */
+        .fire-background {
+            position: fixed;
+            bottom:0; left:0;
+            width:100%; height:150px;
+            display:flex; justify-content:center; align-items:flex-end;
+            pointer-events:none; overflow:hidden; z-index:1;
+            transition: height 1s ease, opacity 1s ease;
+        }
+
+        .flame {
+            border-radius:50%;
+            background: radial-gradient(circle at 50% 100%, #ff4500, #dc2626 70%, transparent 100%);
+            animation: flicker 0.4s infinite alternate;
+        }
+
+        @keyframes flicker {
+            0% { transform: scaleY(1) translateY(0); opacity:1; }
+            50% { transform: scaleY(1.3) translateY(-10px); opacity:0.8; }
+            100% { transform: scaleY(1) translateY(0); opacity:1; }
+        }
+
+        .smoke-overlay {
+            position: fixed;
+            top: 0; left:0; width:100%; height:100%;
+            background: radial-gradient(circle, transparent 0%, rgba(50,50,50,0.7) 100%);
+            opacity:0; pointer-events:none; z-index:2;
+            transition: opacity 2s;
+        }
+
+        .smoke-overlay.active { opacity:1; animation: smokeRise 4s infinite; }
+
+        @keyframes smokeRise { 0% { transform:translateY(0); } 100% { transform:translateY(-50px); } }
+
+        /* CONTAINER */
+        .container {
+            position: relative; z-index:3;
+            max-width:900px; margin:0 auto; padding:20px; min-height:100vh;
+            display:flex; flex-direction:column;
+        }
+
+        header {
+            text-align:center; padding:30px 20px;
+            background:rgba(0,0,0,0.8); border-radius:15px; margin-bottom:20px;
+            border:2px solid #ff4500;
+        }
+
+        h1 { font-size:2em; color:#ff4500; margin-bottom:10px; text-shadow:0 0 20px rgba(255,69,0,0.8); }
+
+        .scenario-intro {
+            background:rgba(0,0,0,0.9); padding:30px; border-radius:15px;
+            margin-bottom:30px; border-left:5px solid #ff4500; display:none;
+        }
+        .scenario-intro.show { display:block; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from {opacity:0; transform:translateY(20px);} to {opacity:1; transform:translateY(0);} }
+        .scenario-intro h2 { color:#ff4500; margin-bottom:15px; font-size:1.5em; }
+        .scenario-intro p { line-height:1.8; color:#ddd; margin-bottom:15px; }
+
+        .alert-box { background: rgba(220,38,38,0.2); border:2px solid #dc2626; padding:20px; border-radius:10px; margin-top:20px; }
+        .alert-box strong { color:#ff4500; }
+
+        .start-btn {
+            background:linear-gradient(135deg,#dc2626 0%,#991b1b 100%);
+            color:white; border:none; padding:18px 50px; font-size:1.3em; font-weight:bold;
+            border-radius:50px; cursor:pointer; margin:30px auto; display:block;
+            box-shadow:0 10px 30px rgba(220,38,38,0.5); transition:all 0.3s;
+        }
+        .start-btn:hover { transform:translateY(-3px); box-shadow:0 15px 40px rgba(220,38,38,0.7); }
+
+        .decision-container { display:none; }
+        .decision-container.active { display:block; animation: fadeIn 0.5s; }
+
+        .status-bar {
+            display:flex; justify-content:space-around;
+            background:rgba(0,0,0,0.9); padding:20px; border-radius:15px; margin-bottom:20px;
+            border:2px solid #ff4500;
+        }
+        .status-item { text-align:center; }
+        .status-value { font-size:2em; font-weight:bold; color:#ff4500; text-shadow:0 0 10px rgba(255,69,0,0.8);}
+        .status-label { font-size:0.9em; color:#999; margin-top:5px; }
+        .timer-circle { width:100px; height:100px; border-radius:50%; background:conic-gradient(#ff4500 0deg, #dc2626 360deg);
+            display:flex; align-items:center; justify-content:center; font-size:2.5em; font-weight:bold; margin:0 auto; box-shadow:0 0 30px rgba(255,69,0,0.8); animation:pulse 1s infinite;
+        }
+        @keyframes pulse {0%,100%{transform:scale(1);}50%{transform:scale(1.05);}}
+        .timer-circle.warning { background:conic-gradient(#fbbf24 0deg,#f59e0b 360deg); animation:shake 0.5s infinite;}
+        .timer-circle.danger { background:conic-gradient(#dc2626 0deg,#991b1b 360deg); animation:shake 0.2s infinite;}
+        @keyframes shake {0%,100%{transform:translateX(0);}25%{transform:translateX(-5px);}75%{transform:translateX(5px);}}
+
+        .situation-box { background:rgba(0,0,0,0.9); padding:30px; border-radius:15px; margin-bottom:20px; border-left:5px solid #ff4500; }
+        .situation-title { font-size:1.5em; color:#ff4500; margin-bottom:15px; display:flex; align-items:center; gap:10px; }
+        .situation-description { font-size:1.1em; line-height:1.8; color:#ddd; margin-bottom:25px; }
+        .choices-grid { display:grid; gap:15px; }
+        .choice-card {
+            background: rgba(30,30,30,0.9); border:2px solid #444; border-radius:12px; padding:20px; cursor:pointer;
+            transition:all 0.3s; position:relative; overflow:hidden;
+        }
+        .choice-card:hover:not(.disabled) { border-color:#ff4500; transform:translateX(5px); box-shadow:0 5px 20px rgba(255,69,0,0.3); }
+        .choice-card.disabled { opacity:0.5; cursor:not-allowed; }
+        .choice-card.selected { border-color:#ff4500; background:rgba(255,69,0,0.2); }
+        .choice-card.correct { border-color:#10b981; background:rgba(16,185,129,0.2); animation:correctFlash 0.5s; }
+        @keyframes correctFlash {0%,100%{transform:scale(1);}50%{transform:scale(1.02);}}
+        .choice-card.incorrect { border-color:#ef4444; background:rgba(239,68,68,0.2); animation:incorrectShake 0.5s; }
+        @keyframes incorrectShake {0%,100%{transform:translateX(0);}25%{transform:translateX(-10px);}75%{transform:translateX(10px);}}
+        .choice-letter { display:inline-block; width:35px; height:35px; background:#ff4500; color:white; border-radius:50%;
+            text-align:center; line-height:35px; font-weight:bold; margin-right:15px; font-size:1.1em;
+        }
+        .choice-text { color:#fff; font-size:1.05em; line-height:1.6; }
+        .choice-consequence { display:none; margin-top:15px; padding:15px; border-radius:8px; font-size:0.95em; line-height:1.6; }
+        .choice-consequence.show { display:block; animation:slideDown 0.3s; }
+        @keyframes slideDown { from{opacity:0; transform:translateY(-10px);} to{opacity:1; transform:translateY(0);} }
+        .choice-consequence.correct { background: rgba(16,185,129,0.2); border-left:4px solid #10b981; color:#d1fae5; }
+        .choice-consequence.incorrect { background: rgba(239,68,68,0.2); border-left:4px solid #ef4444; color:#fecaca; }
+
+        .reference { font-size:0.85em; color:#999; font-style:italic; margin-top:10px; }
+
+        /* Final report */
+        .final-report { display:none; background:rgba(0,0,0,0.95); padding:40px; border-radius:20px; border:3px solid #ff4500; }
+        .final-report.show { display:block; animation:fadeIn 0.5s; }
+        .report-title { font-size:2.5em; text-align:center; margin-bottom:20px; text-shadow:0 0 20px rgba(255,69,0,0.8); }
+        .report-title.excellent { color:#10b981; } .report-title.good { color:#fbbf24; } .report-title.poor { color:#ef4444; }
+        .report-score { text-align:center; font-size:3em; font-weight:bold; margin:30px 0; color:#ff4500; }
+        .report-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin:30px 0; }
+        .metric-card { background:rgba(30,30,30,0.8); padding:20px; border-radius:12px; text-align:center; border:2px solid #444; }
+        .metric-value { font-size:2.5em; font-weight:bold; color:#ff4500; margin-bottom:10px; }
+        .metric-label { color:#999; font-size:0.9em; }
+        .report-summary { background:rgba(30,30,30,0.8); padding:25px; border-radius:12px; margin-top:30px; border-left:5px solid #ff4500; }
+        .summary-item { padding:20px; margin-bottom:15px; border-radius:10px; border-left:4px solid #444; }
+        .summary-item.correct { background: rgba(16,185,129,0.1); border-left-color:#10b981; }
+        .summary-item.incorrect { background: rgba(239,68,68,0.1); border-left-color:#ef4444; }
+        .summary-item strong { display:block; margin-bottom:10px; font-size:1.1em; }
+
+        @media (max-width:768px) {
+            .container { padding:10px; }
+            h1 { font-size:1.5em; }
+            .report-metrics { grid-template-columns:1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="fire-background" id="fireBackground"></div>
+    <div class="smoke-overlay" id="smokeOverlay"></div>
+
+    <div class="container">
+        <header>
+            <h1>🔥 UD15 - Simulatore Emergenza Incendio</h1>
+            <p style="color:#ddd; margin-top:10px;">Gestione reale di un'emergenza in cantiere</p>
+        </header>
+
+        <div class="scenario-intro show" id="scenarioIntro">
+            <h2>🚨 SCENARIO</h2>
+            <p>Sei il <strong>datore di lavoro</strong> di un cantiere di ristrutturazione. Sono le <strong>14:30</strong> di un mercoledì di luglio. In cantiere sono presenti <strong>8 operai</strong> distribuiti su 3 piani dell'edificio.</p>
+            <p>Due saldatori stanno effettuando <strong>lavori di saldatura ad arco</strong> al piano terra, vicino ad un deposito temporaneo di <strong>vernici e solventi</strong>.</p>
+
+            <div class="alert-box">
+                <strong>⚠️ ALERT</strong><br>
+                Improvvisamente senti urlare: <strong>"FUOCO! FUOCO AL DEPOSITO!"</strong><br>
+                Una scintilla ha raggiunto i contenitori di solvente. Le fiamme si stanno propagando rapidamente.
+                <br><br>
+                <strong style="color:#ff4500; font-size:1.2em;">Hai 20 secondi per ogni decisione. Ogni scelta ha conseguenze reali.</strong>
+            </div>
+
+            <button class="start-btn" onclick="startSimulation()">🔥 AVVIA EMERGENZA</button>
+        </div>
+
+        <div id="decisionsContainer"></div>
+        <div class="final-report" id="finalReport"></div>
+    </div>
+
+    <script>
+        /* ---------------- FIRE & SMOKE ---------------- */
+        const fireBackground = document.getElementById('fireBackground');
+
+        function generateFlames(count = 30) {
+            fireBackground.innerHTML = '';
+            for (let i=0;i<count;i++){
+                const flame=document.createElement('div');
+                flame.classList.add('flame');
+                flame.style.animationDuration=(0.3+Math.random()*0.5)+'s';
+                flame.style.height=(80+Math.random()*70)+'px';
+                flame.style.width=(10+Math.random()*15)+'px';
+                flame.style.marginLeft=(Math.random()*3)+'px';
+                flame.style.marginRight=(Math.random()*3)+'px';
+                fireBackground.appendChild(flame);
+            }
+        }
+
+        function updateFire(correct){
+            if(correct){
+                fireBackground.style.height='100px';
+                fireBackground.style.opacity='0.3';
+            } else{
+                fireBackground.style.height='300px';
+                fireBackground.style.opacity='1';
+            }
+        }
+
+        const smokeOverlay=document.getElementById('smokeOverlay');
+
+        /* ---------------- DECISIONS ---------------- */
+       const decisions = [
+            {
+                id: 1,
+                title: '🚨 DECISIONE 1: Primi 20 secondi',
+                description: 'Le fiamme stanno avvolgendo il deposito. Il fumo nero si sta diffondendo rapidamente. Gli operai ti guardano in attesa di ordini.',
+                question: 'Qual è la TUA PRIMA AZIONE?',
+                choices: [
+                    {
+                        id: 'b',
+                        text: 'Attivo l\'allarme e ordino l\'evacuazione immediata verso il punto di raccolta',
+                        correct: true,
+                        consequence: '✅ CORRETTO. Hai seguito la procedura standard: PRIMA allarme ed evacuazione, POI eventuale primo intervento. Gli 8 operai iniziano a uscire in modo ordinato. Guadagni tempo prezioso.',
+                        reference: 'D.M. 3 settembre 2021 - Piano di emergenza',
+                        effects: { time: 0, safety: 20, damage: 0 }
+                    }, 
+                  {
+                        id: 'a',
+                        text: 'Corro a prendere l\'estintore più vicino e cerco di spegnere le fiamme',
+                        correct: false,
+                        consequence: '❌ ERRORE GRAVE. Il D.M. 3/09/2021 stabilisce che la PRIMA azione è attivare l\'allarme ed evacuare. Tentare di spegnere prima di allertare espone te e gli altri operai a rischio intrappolamento. Perdi 30 secondi preziosi.',
+                        reference: 'D.M. 3 settembre 2021 art. 5',
+                        effects: { time: -30, safety: -20, damage: 10 }
+                    },
+                  
+                    {
+                        id: 'c',
+                        text: 'Chiamo immediatamente il 112 e poi valuto la situazione',
+                        correct: false,
+                        consequence: '⚠️ PARZIALMENTE ERRATO. Chiamare i VVF è importante ma NON è la prima azione. Prima devi attivare l\'allarme interno ed evacuare. La chiamata ai soccorsi avviene DOPO aver messo in sicurezza le persone. Ritardo evacuazione: 15 secondi.',
+                        reference: 'D.M. 3 settembre 2021',
+                        effects: { time: -15, safety: -10, damage: 5 }
+                    }
+                ]
+            },
+            {
+                id: 2,
+                title: '🔔 DECISIONE 2: Allarme e Comunicazione',
+                description: 'L\'incendio si sta espandendo. Il fumo riempie il piano terra. Devi coordinare l\'evacuazione.',
+                question: 'Come gestisci l\'allarme e la comunicazione?',
+                choices: [
+                    {
+                        id: 'a',
+                        text: 'Urlo "TUTTI FUORI!" e corro verso l\'uscita',
+                        correct: false,
+                        consequence: '❌ CAOTICO. Gridare senza coordinamento genera panico. Due operai al terzo piano non hanno sentito e restano intrappolati. Manca il controllo delle presenze. Rischio: 2 persone disperse.',
+                        reference: 'Piano di emergenza - Ruolo preposto',
+                        effects: { time: -20, safety: -30, damage: 15 }
+                    },
+                        {
+                        id: 'c',
+                        text: 'Mando un SMS al gruppo WhatsApp "emergenza incendio uscite subito"',
+                        correct: false,
+                        consequence: '❌ INADEGUATO. Il messaggio non arriva a tutti immediatamente (3 operai hanno telefoni in borsa). Non esiste verifica fisica. Ritardo evacuazione: 40 secondi. Sistema di allarme previsto dal DM non utilizzato.',
+                        reference: 'D.M. 3 settembre 2021 - Sistemi di allarme',
+                        effects: { time: -40, safety: -25, damage: 20 }
+                    },
+                   {
+                        id: 'b',
+                        text: 'Attivo il sistema di allarme, invio il preposto ai piani superiori e coordino l\'uscita per vie separate',
+                        correct: true,
+                        consequence: '✅ ECCELLENTE. Hai seguito il piano di emergenza: allarme sonoro, preposto incaricato di verificare i piani, evacuazione ordinata. Tutti gli 8 operai escono in sicurezza in 90 secondi. Nessuno disperso.',
+                        reference: 'D.M. 3 settembre 2021 - Addetti emergenza',
+                        effects: { time: 0, safety: 30, damage: 0 }
+                    }
+                ]
+            },
+            {
+                id: 3,
+                title: '🧯 DECISIONE 3: Primo Intervento',
+                description: 'Tutti gli operai sono usciti. Sei vicino al punto di origine dell\'incendio. Vedi un estintore a CO₂ da 6 kg a 3 metri da te. Le fiamme sono alte circa 1,5 metri.',
+                question: 'Cosa fai?',
+                choices: [
+                    {
+                        id: 'a',
+                        text: 'Uso l\'estintore tentando di spegnere le fiamme dal basso verso l\'alto',
+                        correct: false,
+                        consequence: '❌ TECNICA ERRATA. L\'estintore va usato dall\'alto verso il basso, a zig-zag, sulla BASE delle fiamme. Spruzzando verso l\'alto sprechi agente e le fiamme si espandono lateralmente. L\'incendio NON si spegne.',
+                        reference: 'D.M. 3 settembre 2021 - Uso estintori',
+                        effects: { time: -30, safety: -15, damage: 25 }
+                    },
+                    {
+                        id: 'b',
+                        text: 'Prendo l\'estintore, mi posiziono a 3-4 metri, spruzzo sulla base delle fiamme con movimento a ventaglio',
+                        correct: true,
+                        consequence: '✅ CORRETTO. Tecnica perfetta: distanza di sicurezza, schiena verso uscita, getto su base fiamme, movimento orizzontale. Riesci a contenere l\'incendio in 20 secondi. Danni limitati al deposito.',
+                        reference: 'Formazione addetti antincendio rischio medio',
+                        effects: { time: 0, safety: 20, damage: -20 }
+                    },
+                    {
+                        id: 'c',
+                        text: 'Non intervengo e esco immediatamente: l\'incendio è troppo grande',
+                        correct: false,
+                        consequence: '⚠️ SCELTA PRUDENTE MA INFELICE. L\'incendio era ancora nella fase iniziale e poteva essere domato. La tua mancata azione porta alla propagazione alle strutture. Danno: +50.000€. Ma hai salvaguardato la tua incolumità.',
+                        reference: 'Valutazione rischio vs beneficio',
+                        effects: { time: 0, safety: 10, damage: 35 }
+                    }
+                ]
+            },
+            {
+                id: 4,
+                title: '📞 DECISIONE 4: Chiamata Vigili del Fuoco',
+                description: 'Sei uscito dal cantiere. L\'incendio è ancora attivo. Gli operai sono al punto di raccolta. Devi chiamare i soccorsi.',
+                question: 'Cosa comunichi al 112?',
+                choices: [
+                    {
+                        id: 'a',
+                        text: '"Fuoco in cantiere via Roma 25, venite subito!"',
+                        correct: false,
+                        consequence: '❌ COMUNICAZIONE INCOMPLETA. Mancano: tipo di incendio, feriti, materiali coinvolti, accessi. I VVF perdono tempo a richiedere informazioni. Ritardo intervento: 5 minuti. Danni aumentati.',
+                        reference: 'Procedura chiamata emergenza 112',
+                        effects: { time: -60, safety: -10, damage: 20 }
+                    },
+                    {
+                        id: 'b',
+                        text: '"Incendio da solventi, cantiere via Roma 25, nessun ferito, 8 persone evacuate, accesso da via Verdi, chiedo autopompa"',
+                        correct: true,
+                        consequence: '✅ PERFETTO. Comunicazione completa secondo protocollo: tipo materiale, indirizzo preciso, feriti, persone coinvolte, accessi. I VVF arrivano preparati. Intervento ottimale. Tempo di arrivo: 6 minuti.',
+                        reference: 'Protocollo comunicazione emergenza 112',
+                        effects: { time: 0, safety: 25, damage: -15 }
+                    },
+                    {
+                        id: 'c',
+                        text: 'Aspetto che arrivi il fumo nero visibile da lontano, così i VVF vedranno da soli dov\'è',
+                        correct: false,
+                        consequence: '❌ ASSURDO. Non chiamare i VVF è reato (omissione di soccorso). Il ritardo porta alla distruzione completa del piano terra. Danni: +120.000€. Possibile denuncia penale art. 593 c.p.',
+                        reference: 'Art. 593 c.p. - Omissione soccorso',
+                        effects: { time: -300, safety: -40, damage: 50 }
+                    }
+                ]
+            },
+            {
+                id: 5,
+                title: '⚡ DECISIONE 5: Gestione Impianti',
+                description: 'Il preposto ti ricorda che l\'impianto elettrico e il gas del cantiere sono ancora attivi. L\'incendio continua.',
+                question: 'Cosa fai?',
+                choices: [
+                    {
+                        id: 'b',
+                        text: 'Aspetto i Vigili del Fuoco e gli indico dove sono quadro elettrico e valvola gas',
+                        correct: true,
+                        consequence: '✅ CORRETTO. Hai evitato rischi inutili e fornito informazioni preziose ai VVF. Loro staccano le utenze in sicurezza con DPI adeguati. Evitato rischio esplosione da corto circuito o gas.',
+                        reference: 'Procedura emergenza - Ruolo committente',
+                        effects: { time: 0, safety: 20, damage: -10 }
+                    },
+                       {
+                         id: 'a',
+                        text: 'Rientro nel cantiere e stacco manualmente interruttore generale e valvola gas',
+                        correct: false,
+                        consequence: '❌ RISCHIO MORTALE. Rientrare in un edificio in fiamme senza DPI e con fumo tossico è VIETATO. Rischi asfissia da CO e ustioni. Solo i VVF con APVR possono rientrare. Ti salva solo la fortuna.',
+                        reference: 'D.M. 3 settembre 2021 - Divieto rientro',
+                        effects: { time: -45, safety: -35, damage: 5 }
+                    },
+                   
+                    {
+                        id: 'c',
+                        text: 'Telefono all\'ENEL e al fornitore gas per far staccare da remoto',
+                        correct: false,
+                        consequence: '⚠️ LENTO. Le utility impiegano 30-60 minuti per intervento da remoto. Nel frattempo il corto circuito genera un flashover che espande l\'incendio al primo piano. Danno +30.000€.',
+                        reference: 'Tempi intervento utility',
+                        effects: { time: -120, safety: -15, damage: 25 }
+                    }
+                ]
+            },
+            {
+                id: 6,
+                title: '👥 DECISIONE 6: Controllo Presenze',
+                description: 'I Vigili del Fuoco stanno arrivando. Sei al punto di raccolta con gli operai. Devi verificare che tutti siano usciti.',
+                question: 'Come procedi?',
+                choices: [
+                    {
+                        id: 'a',
+                        text: 'Guardo visivamente: "siamo tutti?" - "Sì!" - "Ok perfetto"',
+                        correct: false,
+                        consequence: '❌ INSUFFICIENTE. Il controllo a vista è inaffidabile. Scopri dopo 10 minuti che manca 1 operaio (era in bagno). I VVF perdono tempo a cercarlo. Emergenza secondaria. Panico totale.',
+                        reference: 'Piano emergenza - Registro presenze',
+                        effects: { time: -180, safety: -40, damage: 10 }
+                    },
+                    {
+                        id: 'b',
+                        text: 'Chiamo uno per uno i nominativi dal registro presenze giornaliero e verifico con documento',
+                        correct: true,
+                        consequence: '✅ PERFETTO. Procedura prevista dal piano: verifica nominativa con registro presenze. Confermi in 2 minuti che tutti gli 8 operai presenti oggi sono al punto di raccolta. Comunichi ai VVF: "Nessun disperso".',
+                        reference: 'D.M. 3 settembre 2021 - Punto di raccolta',
+                        effects: { time: 0, safety: 30, damage: 0 }
+                    },
+                    {
+                        id: 'c',
+                        text: 'Mando un operaio a ricontrollare velocemente i piani superiori',
+                        correct: false,
+                        consequence: '❌ FOLLIA. Mandare un civile a ricontrollare un edificio in fiamme è REATO (art. 590 c.p. lesioni colpose). L\'operaio resta intossicato dal fumo. Ora hai 1 ferito grave. Denuncia penale certa.',
+                        reference: 'Art. 590 c.p. - Lesioni colpose',
+                        effects: { time: -90, safety: -50, damage: 15 }
+                    }
+                ]
+            },
+            {
+                id: 7,
+                title: '🚒 DECISIONE 7: Post-Emergenza',
+                description: 'I Vigili del Fuoco hanno domato l\'incendio in 25 minuti. Il piano terra è danneggiato ma la struttura ha tenuto. Nessun ferito.',
+                question: 'Quali sono le tue azioni IMMEDIATE post-incendio?',
+                choices: [
+                   
+                  {
+                        id: 'b',
+                        text: 'Interdico area, redigo rapporto incidente, comunico a INAIL/ASL, chiamo tecnico per verifica stabilità, convoco riunione sicurezza',
+                        correct: true,
+                        consequence: '✅ ECCELLENTE. Hai seguito TUTTI gli obblighi post-incidente: interdizione, rapporto interno con foto, comunicazione obbligatoria (cantiere fermo >1 giorno), verifica strutturale, analisi cause con RLS. Procedura impeccabile.',
+                        reference: 'D.Lgs. 81/2008 art. 18 + D.M. 3 settembre 2021',
+                        effects: { time: 0, safety: 40, damage: -10 }
+                    },
+                  {
+                        id: 'a',
+                        text: 'Rimando tutti a casa e domani valutiamo i danni',
+                        correct: false,
+                        consequence: '❌ GRAVE ERRORE. Devi: interdire l\'area, redigere rapporto, denunciare a INAIL/ASL se superato 1 giorno di stop, verificare stabilità strutturale. Rimandare a casa tutti senza documentare l\'evento è omissione. Sanzione amministrativa.',
+                        reference: 'D.Lgs. 81/2008 art. 18 - Obbligo comunicazione',
+                        effects: { time: 0, safety: -20, damage: 10 }
+                    },
+                    
+                    {
+                        id: 'c',
+                        text: 'Faccio foto, chiamo assicurazione e riapro cantiere su piani non danneggiati',
+                        correct: false,
+                        consequence: '⚠️ PARZIALMENTE ERRATO. L\'assicurazione è importante ma NON è la priorità. Prima serve: interdizione totale (anche piani non bruciati, finché tecnico non verifica), comunicazione INAIL, rapporto interno. Riapri senza autorizzazione = violazione.',
+                        reference: 'Procedura post-incidente',
+                        effects: { time: 0, safety: -15, damage: 5 }
+                    }
+                ]
+            }
+        ];
+
+
+        let currentDecision = 0;
+        let userChoices = [];
+        let timeLeft = 20;
+        let timerInterval;
+        let totalTime = 0;
+        let safetyScore = 100;
+        let damageScore = 0;
+
+        function startSimulation(){
+            document.getElementById('scenarioIntro').style.display='none';
+            smokeOverlay.classList.add('active');
+            generateFlames();
+            showDecision(0);
+        }
+
+        function showDecision(index){
+            if(index>=decisions.length){ showFinalReport(); return; }
+            currentDecision=index;
+            const decision=decisions[index];
+            const container=document.getElementById('decisionsContainer');
+            container.innerHTML=`
+                <div class="decision-container active">
+                    <div class="status-bar">
+                        <div class="status-item">
+                            <div class="timer-circle" id="timerCircle"><span id="timerValue">20</span></div>
+                            <div class="status-label">Secondi rimasti</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-value">${index+1}/${decisions.length}</div>
+                            <div class="status-label">Decisione</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-value" id="safetyDisplay">${Math.max(0,safetyScore)}%</div>
+                            <div class="status-label">Sicurezza</div>
+                        </div>
+                    </div>
+
+                    <div class="situation-box">
+                        <div class="situation-title">🔥 ${decision.title}</div>
+                        <div class="situation-description">${decision.description}</div>
+                        <strong style="color:#ff4500; font-size:1.2em;">${decision.question}</strong>
+                    </div>
+
+                    <div class="choices-grid">
+                        ${decision.choices.map(choice=>`
+                            <div class="choice-card" id="choice-${choice.id}" onclick="selectChoice('${choice.id}')">
+                                <span class="choice-letter">${choice.id.toUpperCase()}</span>
+                                <span class="choice-text">${choice.text}</span>
+                                <div class="choice-consequence" id="consequence-${choice.id}">
+                                    ${choice.consequence}
+                                    <div class="reference">📖 ${choice.reference}</div>
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                </div>`;
+            startTimer();
+        }
+
+        function startTimer(){
+            timeLeft=20;
+            updateTimerDisplay();
+            timerInterval=setInterval(()=>{
+                timeLeft--; totalTime++;
+                updateTimerDisplay();
+                if(timeLeft<=0){ clearInterval(timerInterval); autoSelectWrong(); }
+            },1000);
+        }
+
+        function updateTimerDisplay(){
+            const timerValue=document.getElementById('timerValue');
+            const timerCircle=document.getElementById('timerCircle');
+            if(timerValue){ timerValue.textContent=timeLeft;
+                timerCircle.className='timer-circle';
+                               if(timeLeft<=5){ timerCircle.classList.add('danger'); }
+                else if(timeLeft<=10){ timerCircle.classList.add('warning'); }
+            }
+        }
+
+        function autoSelectWrong(){
+            const decision=decisions[currentDecision];
+            const wrongChoice = decision.choices.find(c=>!c.correct);
+            if(wrongChoice){ selectChoice(wrongChoice.id); }
+        }
+
+        function selectChoice(choiceId){
+            clearInterval(timerInterval);
+            const decision=decisions[currentDecision];
+            const selectedChoice=decision.choices.find(c=>c.id===choiceId);
+            if(!selectedChoice) return;
+
+            userChoices.push(selectedChoice);
+            // Mostra conseguenza
+            const consequenceDiv=document.getElementById(`consequence-${choiceId}`);
+            if(consequenceDiv){ consequenceDiv.classList.add('show'); }
+            
+            // Aggiorna punteggi
+            if(selectedChoice.correct){
+                safetyScore += 5;
+                damageScore -= 5;
+                updateFire(true);
+            } else{
+                safetyScore -= 10;
+                damageScore += 10;
+                updateFire(false);
+            }
+
+            document.getElementById('safetyDisplay').textContent=Math.max(0,safetyScore)+'%';
+
+            // Disabilita tutte le scelte
+            decision.choices.forEach(c=>{
+                const card=document.getElementById(`choice-${c.id}`);
+                if(card){ card.classList.add('disabled'); 
+                    if(c.correct) card.classList.add('correct');
+                    else if(c.id===choiceId) card.classList.add('incorrect');
+                }
+            });
+
+            // Passa alla prossima decisione dopo 3 secondi
+            setTimeout(()=>{ showDecision(currentDecision+1); },3000);
+        }
+
+        function showFinalReport(){
+            const container=document.getElementById('decisionsContainer');
+            container.innerHTML='';
+            const report=document.getElementById('finalReport');
+            report.innerHTML=`
+                <div class="report-title ${safetyScore>=80?'excellent':(safetyScore>=50?'good':'poor')}">
+                    🔥 RISULTATO FINALE
+                </div>
+                <div class="report-score">${Math.max(0,safetyScore)}%</div>
+                <div class="report-metrics">
+                    <div class="metric-card">
+                        <div class="metric-value">${totalTime}s</div>
+                        <div class="metric-label">Tempo totale</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${damageScore}</div>
+                        <div class="metric-label">Danni</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${userChoices.filter(c=>c.correct).length}</div>
+                        <div class="metric-label">Decisioni corrette</div>
+                    </div>
+                </div>
+                <div class="report-summary">
+                    ${userChoices.map((c,i)=>`
+                        <div class="summary-item ${c.correct?'correct':'incorrect'}">
+                            <strong>Decisione ${i+1}: ${c.correct?'CORRETTA':'ERRATA'}</strong>
+                            ${c.consequence}
+                        </div>`).join('')}
+                </div>
+            `;
+            report.classList.add('show');
+            // Rimuove fiamme e fumo gradualmente
+            fireBackground.style.transition='height 2s, opacity 2s';
+            fireBackground.style.height='0px';
+            fireBackground.style.opacity='0';
+            smokeOverlay.style.transition='opacity 2s';
+            smokeOverlay.style.opacity='0';
+        }
+    </script>
+</body>
+</html>
+
