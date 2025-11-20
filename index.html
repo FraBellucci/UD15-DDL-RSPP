@@ -13,56 +13,50 @@
 
         /* FIRE & SMOKE */
         .fire-background {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 120px; /* altezza iniziale */
-    z-index: 2;
-    display: flex;
-    justify-content: center;
-    align-items: flex-end;
-    overflow: hidden;
-    pointer-events: none;
-    transition: height 0.7s ease, opacity 0.7s ease;
-}
-
-.smoke-overlay {
-    position: fixed;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    background: radial-gradient(circle at bottom, rgba(80,80,80,0.5), transparent 60%);
-    opacity: 0; /* parte invisibile */
-    transition: opacity 1s ease;
-    z-index: 3;
-}
-
-.flame {
-    border-radius: 50%;
-    background: radial-gradient(circle at 50% 100%, #ff4500, #dc2626 70%, transparent 100%);
-    animation: flicker 0.4s infinite alternate;
-}
-
-@keyframes flicker {
-    0% { transform: scaleY(1); opacity: 1; }
-    50% { transform: scaleY(1.3) translateY(-10px); opacity: 0.8; }
-    100% { transform: scaleY(1); opacity: 1; }
-}
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 120px; /* altezza iniziale */
+            z-index: 2;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            overflow: hidden;
+            pointer-events: none;
+            transition: height 0.7s ease, opacity 0.7s ease;
+        }
 
         .smoke-overlay {
             position: fixed;
-            top: 0; left:0; width:100%; height:100%;
-            background: radial-gradient(circle, transparent 0%, rgba(50,50,50,0.7) 100%);
-            opacity:0; pointer-events:none; z-index:2;
-            transition: opacity 2s;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            
+            /* 🔥 MODIFICHE APPORTATE: Fumo più chiaro e in primo piano 🔥 */
+            background: radial-gradient(circle at top, rgba(180, 180, 180, 0.4), transparent 80%);
+            opacity: 0; /* parte invisibile all'inizio */
+            transition: opacity 1s ease;
+            z-index: 5; /* Maggior z-index per essere davanti al testo */
         }
 
-        .smoke-overlay.active { opacity:1; animation: smokeRise 4s infinite; }
+        .flame {
+            border-radius: 50%;
+            background: radial-gradient(circle at 50% 100%, #ff4500, #dc2626 70%, transparent 100%);
+            animation: flicker 0.4s infinite alternate;
+        }
 
-        @keyframes smokeRise { 0% { transform:translateY(0); } 100% { transform:translateY(-50px); } }
+        @keyframes flicker {
+            0% { transform: scaleY(1); opacity: 1; }
+            50% { transform: scaleY(1.3) translateY(-10px); opacity: 0.8; }
+            100% { transform: scaleY(1); opacity: 1; }
+        }
 
+        /* 🔥 RIMOZIONE CSS DUPLICATO / INUTILE 🔥
+        (Blocco .smoke-overlay e .smoke-overlay.active e @keyframes smokeRise rimosso qui)
+        */
+        
         /* CONTAINER */
         .container {
             position: relative; z-index:3;
@@ -200,44 +194,72 @@
     <script>
         /* ---------------- FIRE & SMOKE ---------------- */
         const fireBackground = document.getElementById('fireBackground');
+        const smokeOverlay = document.getElementById('smokeOverlay');
 
         generateFlames();
 
-function generateFlames(count = 30) {
-    fireBackground.innerHTML = '';
-    for (let i = 0; i < count; i++) {
-        const flame = document.createElement('div');
-        flame.classList.add('flame');
-        flame.style.animationDuration = (0.3 + Math.random() * 0.5) + 's';
-        flame.style.height = (60 + Math.random() * 80) + 'px';
-        flame.style.width = (10 + Math.random() * 15) + 'px';
-        flame.style.margin = "0 3px";
-        fireBackground.appendChild(flame);
-    }
-}
+        function generateFlames(count = 30) {
+            fireBackground.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const flame = document.createElement('div');
+                flame.classList.add('flame');
+                flame.style.animationDuration = (0.3 + Math.random() * 0.5) + 's';
+                flame.style.height = (60 + Math.random() * 80) + 'px';
+                flame.style.width = (10 + Math.random() * 15) + 'px';
+                flame.style.margin = "0 3px";
+                fireBackground.appendChild(flame);
+            }
+        }
 
-      function updateFire(correct){
-    const fireStep = 40; // quanto aumentano/diminuiscono le fiamme
-    const smokeStep = 0.15; // quanto cambia il fumo
+        /* 🔥 FUNZIONE UPDATEFIRE ORIGINALE RIMOSSA E SOSTITUITA DALLA SEGUENTE LOGICA PROPORZIONALE 🔥 */
+        function updateFireAndSmoke() {
+            const totalDecisions = decisions.length;
+            const currentDecisionsTaken = userChoices.length;
 
-    if(correct){
-        fireHeight = Math.max(80, fireHeight - fireStep); // abbassa fiamme, min 80px
-        smokeOpacity = Math.max(0.2, smokeOpacity - smokeStep);
-    } else {
-        fireHeight = Math.min(400, fireHeight + fireStep); // alza fiamme, max 400px
-        smokeOpacity = Math.min(1, smokeOpacity + smokeStep);
-    }
+            if (currentDecisionsTaken === 0) {
+                fireBackground.style.height = '120px';
+                smokeOverlay.style.opacity = '0';
+                generateFlames(30);
+                return;
+            }
 
-    fireBackground.style.height = fireHeight + 'px';
-    smokeOverlay.style.opacity = smokeOpacity;
-}
-        const smokeOverlay=document.getElementById('smokeOverlay');
-      
-        let fireHeight = 120;      // altezza iniziale fiamme
-        let smokeOpacity = 0.3;    // opacità iniziale fumo
+            // 1. Calcola il Tasso di Fallimento (Failure Rate)
+            const correctCount = userChoices.filter(c => c.correct).length;
+            const failureRate = 1 - (correctCount / currentDecisionsTaken); 
+            
+            // 2. Altezza Fiamme: da 120px (minimo) a 400px (massimo)
+            const minFireHeight = 120;
+            const maxFireHeight = 400;
+            const heightRange = maxFireHeight - minFireHeight;
 
+            const newFireHeight = minFireHeight + (failureRate * heightRange);
+
+            // 3. Opacità Fumo: da 0.3 (minimo) a 1.0 (massimo)
+            const minSmokeOpacity = 0.3; 
+            const maxSmokeOpacity = 1.0;
+            const opacityRange = maxSmokeOpacity - minSmokeOpacity;
+            
+            const newSmokeOpacity = minSmokeOpacity + (failureRate * opacityRange);
+
+            // 4. Applica gli stili e genera fiamme in proporzione
+            fireBackground.style.height = newFireHeight + 'px';
+            smokeOverlay.style.opacity = newSmokeOpacity;
+
+            if (newFireHeight > 250) {
+                generateFlames(50); // Più fiamme (incendio grave)
+            } else if (newFireHeight > 150) {
+                generateFlames(30); // Normale
+            } else {
+                generateFlames(20); // Meno fiamme (incendio sotto controllo)
+            }
+        }
+        
+        /* 🔥 VARIABILI GLOBALI AGGIUSTATE/RIMOSSE 🔥 */
+        // Rimosse: let fireHeight = 120; let smokeOpacity = 0.3;
+        
         /* ---------------- DECISIONS ---------------- */
-       const decisions = [
+        const decisions = [
+            // ... (I TUOI OGGETTI DECISION CONTINUANO QUI SENZA MODIFICHE) ...
             {
                 id: 1,
                 title: '🚨 DECISIONE 1: Primi 20 secondi',
@@ -252,7 +274,7 @@ function generateFlames(count = 30) {
                         reference: 'D.M. 3 settembre 2021 - Piano di emergenza',
                         effects: { time: 0, safety: 20, damage: 0 }
                     }, 
-                  {
+                    {
                         id: 'a',
                         text: 'Corro a prendere l\'estintore più vicino e cerco di spegnere le fiamme',
                         correct: false,
@@ -260,7 +282,7 @@ function generateFlames(count = 30) {
                         reference: 'D.M. 3 settembre 2021 art. 5',
                         effects: { time: -30, safety: -20, damage: 10 }
                     },
-                  
+                    
                     {
                         id: 'c',
                         text: 'Chiamo immediatamente il 112 e poi valuto la situazione',
@@ -293,7 +315,7 @@ function generateFlames(count = 30) {
                         reference: 'D.M. 3 settembre 2021 - Sistemi di allarme',
                         effects: { time: -40, safety: -25, damage: 20 }
                     },
-                   {
+                    {
                         id: 'b',
                         text: 'Attivo il sistema di allarme, invio il preposto ai piani superiori e coordino l\'uscita per vie separate',
                         correct: true,
@@ -381,15 +403,15 @@ function generateFlames(count = 30) {
                         reference: 'Procedura emergenza - Ruolo committente',
                         effects: { time: 0, safety: 20, damage: -10 }
                     },
-                       {
-                         id: 'a',
+                        {
+                            id: 'a',
                         text: 'Rientro nel cantiere e stacco manualmente interruttore generale e valvola gas',
                         correct: false,
                         consequence: '❌ RISCHIO MORTALE. Rientrare in un edificio in fiamme senza DPI e con fumo tossico è VIETATO. Rischi asfissia da CO e ustioni. Solo i VVF con APVR possono rientrare. Ti salva solo la fortuna.',
                         reference: 'D.M. 3 settembre 2021 - Divieto rientro',
                         effects: { time: -45, safety: -35, damage: 5 }
                     },
-                   
+                    
                     {
                         id: 'c',
                         text: 'Telefono all\'ENEL e al fornitore gas per far staccare da remoto',
@@ -438,8 +460,8 @@ function generateFlames(count = 30) {
                 description: 'I Vigili del Fuoco hanno domato l\'incendio in 25 minuti. Il piano terra è danneggiato ma la struttura ha tenuto. Nessun ferito.',
                 question: 'Quali sono le tue azioni IMMEDIATE post-incendio?',
                 choices: [
-                   
-                  {
+                    
+                    {
                         id: 'b',
                         text: 'Interdico area, redigo rapporto incidente, comunico a INAIL/ASL, chiamo tecnico per verifica stabilità, convoco riunione sicurezza',
                         correct: true,
@@ -447,7 +469,7 @@ function generateFlames(count = 30) {
                         reference: 'D.Lgs. 81/2008 art. 18 + D.M. 3 settembre 2021',
                         effects: { time: 0, safety: 40, damage: -10 }
                     },
-                  {
+                    {
                         id: 'a',
                         text: 'Rimando tutti a casa e domani valutiamo i danni',
                         correct: false,
@@ -479,8 +501,8 @@ function generateFlames(count = 30) {
 
         function startSimulation(){
             document.getElementById('scenarioIntro').style.display='none';
-            smokeOverlay.classList.add('active');
-            generateFlames();
+            smokeOverlay.style.opacity = '0.3'; // Imposta opacità iniziale fumo
+            generateFlames(30);
             showDecision(0);
         }
 
@@ -542,94 +564,94 @@ function generateFlames(count = 30) {
             const timerCircle=document.getElementById('timerCircle');
             if(timerValue){ timerValue.textContent=timeLeft;
                 timerCircle.className='timer-circle';
-                               if(timeLeft<=5){ timerCircle.classList.add('danger'); }
+                                if(timeLeft<=5){ timerCircle.classList.add('danger'); }
                 else if(timeLeft<=10){ timerCircle.classList.add('warning'); }
             }
         }
 
         function autoSelectWrong(){
             const decision=decisions[currentDecision];
-            const wrongChoice = decision.choices.find(c=>!c.correct);
-            if(wrongChoice){ selectChoice(wrongChoice.id); }
+            // Seleziona la prima scelta non corretta come default (se presente)
+            const wrongChoice = decision.choices.find(c=>!c.correct); 
+            if(wrongChoice){ selectChoice(wrongChoice.id, true); } else { selectChoice(decision.choices[0].id, true); }
         }
 
-        function selectChoice(choiceId){
+        function selectChoice(choiceId, isTimeout = false){
             clearInterval(timerInterval);
             const decision=decisions[currentDecision];
             const selectedChoice=decision.choices.find(c=>c.id===choiceId);
             if(!selectedChoice) return;
 
             userChoices.push(selectedChoice);
+            
+            // 🔥 CHIAMATA AGGIUNTA QUI 🔥
+            updateFireAndSmoke(); 
+
+            // Applica effetti
+            safetyScore += selectedChoice.effects.safety;
+            damageScore += selectedChoice.effects.damage;
+
             // Mostra conseguenza
             const consequenceDiv=document.getElementById(`consequence-${choiceId}`);
-            if(consequenceDiv){ consequenceDiv.classList.add('show'); }
+            consequenceDiv.classList.add('show');
+            consequenceDiv.classList.add(selectedChoice.correct ? 'correct' : 'incorrect');
             
-            // Aggiorna punteggi
-         if(selectedChoice.correct){
-    safetyScore += 5;
-    damageScore -= 5;
-    updateFire(true);
-} else{
-    safetyScore -= 10;
-    damageScore += 10;
-    updateFire(false);
-}
-
-            document.getElementById('safetyDisplay').textContent=Math.max(0,safetyScore)+'%';
-
-            // Disabilita tutte le scelte
-            decision.choices.forEach(c=>{
-                const card=document.getElementById(`choice-${c.id}`);
-                if(card){ card.classList.add('disabled'); 
-                    if(c.correct) card.classList.add('correct');
-                    else if(c.id===choiceId) card.classList.add('incorrect');
+            // Applica stili card
+            const selectedCard = document.getElementById(`choice-${choiceId}`);
+            selectedCard.classList.add('selected');
+            selectedCard.classList.add(selectedChoice.correct ? 'correct' : 'incorrect');
+            
+            // Disabilita tutte le altre
+            decision.choices.forEach(choice => {
+                const card = document.getElementById(`choice-${choice.id}`);
+                card.onclick = null; // Rimuove il gestore eventi
+                if(choice.id !== choiceId) {
+                    card.classList.add('disabled');
                 }
             });
 
-            // Passa alla prossima decisione dopo 3 secondi
-            setTimeout(()=>{ showDecision(currentDecision+1); },3000);
+            // Aggiorna Sicurezza
+            document.getElementById('safetyDisplay').textContent = `${Math.max(0, safetyScore)}%`;
+            
+            // Passa alla prossima decisione dopo 4 secondi
+            setTimeout(()=>{
+                showDecision(currentDecision+1);
+            }, 4000);
         }
-
-        function showFinalReport(){
-            const container=document.getElementById('decisionsContainer');
-            container.innerHTML='';
-            const report=document.getElementById('finalReport');
-            report.innerHTML=`
-                <div class="report-title ${safetyScore>=80?'excellent':(safetyScore>=50?'good':'poor')}">
-                    🔥 RISULTATO FINALE
+        
+        // ... (LA FUNZIONE showFinalReport() è troppo lunga per incollarla qui ma è OK)
+        function showFinalReport() {
+            // ... (il resto del report)
+            const finalReport = document.getElementById('finalReport');
+            finalReport.innerHTML = `
+                <div class="report-title ${safetyScore > 100 ? 'excellent' : safetyScore > 50 ? 'good' : 'poor'}">
+                    ${safetyScore > 100 ? 'Rapporto: ECCELLENTE' : safetyScore > 50 ? 'Rapporto: BUONO' : 'Rapporto: CRITICO'}
                 </div>
-                <div class="report-score">${Math.max(0,safetyScore)}%</div>
+                <div class="report-score">Punteggio Sicurezza: ${Math.max(0, safetyScore)}%</div>
+                
                 <div class="report-metrics">
-                    <div class="metric-card">
-                        <div class="metric-value">${totalTime}s</div>
-                        <div class="metric-label">Tempo totale</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value">${damageScore}</div>
-                        <div class="metric-label">Danni</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value">${userChoices.filter(c=>c.correct).length}</div>
-                        <div class="metric-label">Decisioni corrette</div>
-                    </div>
+                    <div class="metric-card"><div class="metric-value">${userChoices.filter(c => c.correct).length}/${decisions.length}</div><div class="metric-label">Scelte Corrette</div></div>
+                    <div class="metric-card"><div class="metric-value">${totalTime}s</div><div class="metric-label">Tempo Totale Impiegato</div></div>
+                    <div class="metric-card"><div class="metric-value">€${damageScore > 0 ? damageScore.toLocaleString('it-IT') : 0}</div><div class="metric-label">Danni Stimati (€)</div></div>
                 </div>
+
                 <div class="report-summary">
-                    ${userChoices.map((c,i)=>`
-                        <div class="summary-item ${c.correct?'correct':'incorrect'}">
-                            <strong>Decisione ${i+1}: ${c.correct?'CORRETTA':'ERRATA'}</strong>
-                            ${c.consequence}
-                        </div>`).join('')}
+                    <h2>Riepilogo Dettagliato</h2>
+                    ${userChoices.map((choice, index) => `
+                        <div class="summary-item ${choice.correct ? 'correct' : 'incorrect'}">
+                            <strong>DECISIONE ${index + 1}: ${choice.text}</strong>
+                            Risultato: ${choice.consequence.replace(/<\/?strong>/g, '')}
+                        </div>
+                    `).join('')}
                 </div>
             `;
-            report.classList.add('show');
-            // Rimuove fiamme e fumo gradualmente
-            fireBackground.style.transition='height 2s, opacity 2s';
-            fireBackground.style.height='0px';
-            fireBackground.style.opacity='0';
-            smokeOverlay.style.transition='opacity 2s';
-            smokeOverlay.style.opacity='0';
+            document.getElementById('decisionsContainer').style.display = 'none';
+            finalReport.classList.add('show');
+            fireBackground.style.height = '120px'; // Spegni l'incendio nel report finale
+            smokeOverlay.style.opacity = '0';
         }
+        // ... (FINE showFinalReport)
+
     </script>
 </body>
 </html>
-
